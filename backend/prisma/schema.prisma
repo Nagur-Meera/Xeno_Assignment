@@ -1,0 +1,145 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id                   String     @id @default(cuid())
+  name                 String
+  shopifyDomain        String     @unique
+  shopifyToken         String?    @db.Text
+  webhookSecret        String?
+  isActive             Boolean    @default(true)
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+  shopifyAccessToken   String?    @db.Text
+  shopifyWebhookSecret String?
+  customers            Customer[]
+  events               Event[]
+  orders               Order[]
+  products             Product[]
+  users                User[]
+
+  @@map("tenants")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      String   @default("admin")
+  tenantId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId], map: "users_tenantId_fkey")
+  @@map("users")
+}
+
+model Customer {
+  id                String   @id @default(cuid())
+  shopifyCustomerId String
+  tenantId          String
+  firstName         String?
+  lastName          String?
+  email             String?
+  phone             String?
+  totalSpent        Decimal  @default(0.00) @db.Decimal(10, 2)
+  ordersCount       Int      @default(0)
+  tags              String?  @db.Text
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orders            Order[]
+
+  @@unique([shopifyCustomerId, tenantId], name: "tenantId_shopifyCustomerId")
+  @@index([tenantId], map: "customers_tenantId_fkey")
+  @@map("customers")
+}
+
+model Product {
+  id               String      @id @default(cuid())
+  shopifyProductId String
+  tenantId         String
+  title            String
+  handle           String?
+  price            Decimal?    @db.Decimal(10, 2)
+  compareAtPrice   Decimal?    @db.Decimal(10, 2)
+  vendor           String?
+  productType      String?
+  status           String      @default("active")
+  tags             String?     @db.Text
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  description      String?     @db.Text
+  orderItems       OrderItem[]
+  tenant           Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([shopifyProductId, tenantId], name: "tenantId_shopifyProductId")
+  @@index([tenantId], map: "products_tenantId_fkey")
+  @@map("products")
+}
+
+model Order {
+  id                String      @id @default(cuid())
+  shopifyOrderId    String
+  tenantId          String
+  customerId        String?
+  orderNumber       String?
+  totalPrice        Decimal     @db.Decimal(10, 2)
+  subtotalPrice     Decimal     @db.Decimal(10, 2)
+  totalTax          Decimal     @default(0.00) @db.Decimal(10, 2)
+  totalDiscounts    Decimal     @default(0.00) @db.Decimal(10, 2)
+  currency          String      @default("USD")
+  financialStatus   String?
+  fulfillmentStatus String?
+  orderDate         DateTime?
+  cancelledAt       DateTime?
+  processedAt       DateTime?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  tags              String?     @db.Text
+  orderItems        OrderItem[]
+  customer          Customer?   @relation(fields: [customerId], references: [id])
+  tenant            Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([shopifyOrderId, tenantId], name: "tenantId_shopifyOrderId")
+  @@index([customerId], map: "orders_customerId_fkey")
+  @@index([tenantId], map: "orders_tenantId_fkey")
+  @@map("orders")
+}
+
+model OrderItem {
+  id            String   @id @default(cuid())
+  orderId       String
+  productId     String?
+  title         String
+  quantity      Int
+  price         Decimal  @db.Decimal(10, 2)
+  totalDiscount Decimal  @default(0.00) @db.Decimal(10, 2)
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product       Product? @relation(fields: [productId], references: [id])
+
+  @@index([orderId], map: "order_items_orderId_fkey")
+  @@index([productId], map: "order_items_productId_fkey")
+  @@map("order_items")
+}
+
+model Event {
+  id         String   @id @default(cuid())
+  tenantId   String
+  customerId String?
+  eventType  String
+  eventData  String?  @db.LongText
+  createdAt  DateTime @default(now())
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId], map: "events_tenantId_fkey")
+  @@map("events")
+}
